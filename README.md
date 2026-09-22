@@ -21,11 +21,16 @@ The guard is a plain regex check in code (`SUBMIT_PATTERN` in [`internship_apply
 
 Every observed page becomes an indexed table of clickable, fillable, and selectable elements. [TypeSafe's Jev](https://docs.typesafe.ai/introduction) is asked which operation to perform and which element to target — one API call, evaluated in parallel, not a chain of reasoning steps. A small text model only gets involved when a field needs typed text, and even then, it's told never to invent a fact that isn't in your resume or profile — if nothing covers a field, it's left blank and reported back to you.
 
+Two things the model is never shown are handled in plain code before each decision: a **sign-in wall** (Workday requires an account) pauses the run so you log in yourself — your password never passes through the tool — and a **resume upload box** gets the PDF from your profile attached directly.
+
 ```text
-one job page → indexed elements → Jev picks operation + target → browser acts → observe again
+one job page → sign-in wall? pause for you · upload box? attach resume
+            → indexed elements → Jev picks operation + target → browser acts → observe again
                                           │
-                          CLICK a Submit-like button? → blocked unless --confirm-submit
+                          CLICK a Submit-like button? → stop, leave the tab open for you
 ```
+
+Per-site notes in [`internship_apply/sites.py`](internship_apply/sites.py) tell the model how Workday's six-step wizard, button-style dropdowns, and split month/year dates work, and which button labels on each ATS mean "send it" versus "next page".
 
 This decision loop, the DOM reader, and the browser connection are [jev-ultrafast](https://github.com/browser-use/jev-ultrafast), vendored in under `jev_ultrafast/` — see **Credits** below. `internship_apply/` is the layer built on top of it for this one job: load a profile, build a goal, guard the submit click, report what got skipped.
 
@@ -54,14 +59,19 @@ uv run --env-file .env python -m internship_apply.apply \
 It prints each field as it fills it:
 
 ```text
-   210 ms  fill    Full name
-   340 ms  fill    Email
-   480 ms  select  Are you legally authorized to work in the U.S. without sponsorship?
-   610 ms  fill    Why are you interested in this role?
+== Workday: My Information ==
+   210 ms  fill    First Name
+   340 ms  fill    Email Address
+   480 ms  click   Phone Device Type
+   ...
+== Workday: My Experience ==
+   attached resume to file input "file-upload-input-ref"
+   ...
+== Workday: Review ==
 
-Stopped before clicking a submit control: "Submit Application"
-Review the filled form in the browser, then either:
-  - click it yourself, or
+Stopped before clicking a submit control: "Submit"
+The browser tab is still open. Review the filled form there, then either:
+  - click that button yourself, or
   - re-run this command with --confirm-submit once you've checked it.
 ```
 
