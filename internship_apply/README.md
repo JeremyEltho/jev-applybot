@@ -5,6 +5,8 @@ Jev-driven click/type/select loop as the rest of this repo. It stops before the 
 submit control — you review and press it yourself, or pass `--confirm-submit` once
 you trust it on a given site.
 
+<img src="../docs/demo-empty.jpg" alt="A sample internship application form before any fields are filled" width="100%" />
+
 ## Setup
 
 1. From the repo root: `uv sync`, then `cp .env.example .env` and fill in

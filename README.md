@@ -1,146 +1,92 @@
-<img src="docs/banner.svg" alt="Jev Ultrafast · Browser Use × TypeSafe" width="100%" />
+# jev-applybot
 
-# Jev Ultrafast ⚡
+**Fill out one internship application from your resume, then stop.**
 
-> [!IMPORTANT]
-> **The Browser Use Cloud waitlist is open.** Get early access to ultrafast browser agents in the cloud.
-> **[Join the waitlist →](https://browser-use.com/ultrafast?utm_source=github&utm_medium=readme&utm_campaign=jev-ultrafast)**
+You give it a job posting URL and a profile (resume + answers to the usual questions). It walks the form field by field — name, school, work authorization, "why this role" — and stops at the review screen. It never clicks Submit / Apply / Send Application on its own. You read the filled form and press that button yourself.
 
-**A browser agent with a dynamic, indexed action space.**
+<img src="docs/demo-filled-top.jpg" alt="A sample internship application form with contact info, education, and application questions filled in from a candidate profile" width="100%" />
 
-Give it one goal. [TypeSafe's Jev](https://docs.typesafe.ai/introduction) picks an operation and an element. A small LLM writes text only when the operation is `TYPE_TEXT`.
+*A sample application form (not a real job posting) filled with placeholder data, to show the shape of what the tool does. Candidate name and details above are made up for this screenshot — nothing here is a real person.*
 
-**Zürich → London on Google Flights in 7.1 seconds.** One natural-language goal, actual text generation, and loading waits included.
+## Why it stops before submitting
 
-<a href="docs/demo.mp4"><img src="docs/demo.gif" alt="A real Google Flights search at 1× speed, with generated city names and dynamic operation/target decisions" width="100%" /></a>
+Two separate reasons, both non-negotiable:
 
-[Watch the MP4](docs/demo.mp4) · [Measurements](docs/performance.md) · [Read the loop](jev_ultrafast/agent.py)
+1. **Most job boards' terms of service prohibit automated applications** — Workday, Greenhouse, LinkedIn Easy Apply, and Handshake all restrict bot-submitted applications in some form. Filling a form you then review and submit yourself is a different thing than a bot submitting on your behalf, and this tool is built for the former.
+2. **A submitted application isn't reversible the way a filled-in field is.** Every other action in this loop can be corrected on the next pass. Submit can't be undone.
 
-## The action space
+The guard is a plain regex check in code (`SUBMIT_PATTERN` in [`internship_apply/apply.py`](internship_apply/apply.py)) that runs *after* the model has decided what to click and *before* the browser executes it. It doesn't depend on the model choosing to behave — it can't click a matched button, full stop, unless you explicitly pass `--confirm-submit` after reviewing the form yourself.
 
-Every observation produces a new element table:
+## How it decides what to do
 
-```text
-[1] button    Change ticket type · Round trip
-[2] combobox  Where from?        · San Francisco
-[3] combobox  Where to?          · empty
-[4] textbox   Departure          · empty
-...
-```
-
-The operations are `CLICK`, `TYPE_TEXT`, `SELECT`, `SCROLL_UP`, `SCROLL_DOWN`, `WAIT`, `DONE`, and `BLOCKED`. Only supported operations and targets are offered.
+Every observed page becomes an indexed table of clickable, fillable, and selectable elements. [TypeSafe's Jev](https://docs.typesafe.ai/introduction) is asked which operation to perform and which element to target — one API call, evaluated in parallel, not a chain of reasoning steps. A small text model only gets involved when a field needs typed text, and even then, it's told never to invent a fact that isn't in your resume or profile — if nothing covers a field, it's left blank and reported back to you.
 
 ```text
-                      one TypeSafe request
-                     ┌───────────────────────────┐
-page → element table → operation                 │
-                     │ click_target              │
-                     │ type_text_target          │
-                     │ select_target, if present │
-                     └─────────────┬─────────────┘
-                         use the matching target
-                                   │
-                    CLICK [7] ─────┤──→ browser
-                TYPE_TEXT [3] ─────┘
-                          ↓
-                   small LLM → text → browser
+one job page → indexed elements → Jev picks operation + target → browser acts → observe again
+                                          │
+                          CLICK a Submit-like button? → blocked unless --confirm-submit
 ```
 
-Target questions are speculative. If the operation is `CLICK`, only `click_target` can execute. Two decisions, **one network round trip**. Each target head contains only compatible elements. Native dropdown choices carry an observed element/option index.
+This decision loop, the DOM reader, and the browser connection are [jev-ultrafast](https://github.com/browser-use/jev-ultrafast), vendored in under `jev_ultrafast/` — see **Credits** below. `internship_apply/` is the layer built on top of it for this one job: load a profile, build a goal, guard the submit click, report what got skipped.
 
-There are no site-specific action scripts or prepared field strings in the policy. The Flights example supplies a goal and independently verifies the outcome. The screenshot renderer adds labels afterward; it does not drive the browser.
-
-## Try it
+## Setup
 
 ```bash
-git clone https://github.com/browser-use/jev-ultrafast.git
-cd jev-ultrafast
+git clone https://github.com/JeremyEltho/jev-applybot.git
+cd jev-applybot
 uv sync
 cp .env.example .env
-# Add TYPESAFE_API_KEY and TEXT_MODEL_API_KEY.
-uv run jev
+# add TYPESAFE_API_KEY and TEXT_MODEL_API_KEY to .env
+cp internship_apply/profile.example.json internship_apply/profile.json
+# edit profile.json with your real info, and add internship_apply/resume.txt next to it
 ```
 
-Open **http://127.0.0.1:8766** and click **Start demo → Run automatically**. The inspector shows numbered elements, operation probabilities, target probabilities, and executed actions. **Choose next** pauses before execution.
+`profile.json` and `resume.txt` are gitignored — your real details never get committed by accident.
 
-Chrome connects through [Browser Harness](https://github.com/browser-use/browser-harness), installed by `uv sync`. Run `uv run browser-harness --doctor` if it needs connecting. Allow remote debugging in Chrome when prompted.
-
-`TEXT_MODEL_API_KEY` is an OpenRouter key in the example configuration. The current demo uses `inception/mercury-2.5` with reasoning disabled. Gemini, GLM, and DeepSeek can also use the OpenAI-compatible text helper; configure the appropriate model, endpoint, and reasoning setting.
-
-## Internship application filler
-
-[`internship_apply/`](internship_apply/README.md) fills one job application form from a resume and a candidate profile, using the same click/type/select loop above. It stops before the final Submit/Apply control by default, so a person always reviews before anything is sent.
-
-## Use the library
-
-```python
-from jev_ultrafast import Agent
-
-with Agent(
-    "https://www.google.com/travel/flights?hl=en",
-    "Find one-way flights from Zurich to London on September 20, 2026, "
-    "for one adult in economy. Stop when matching flight options are visible.",
-) as agent:
-    for state in agent.run():
-        print(state["elapsed_ms"], state["status"])
-```
-
-Run with `uv run --env-file .env python your_script.py`. The same policy can run a different task:
+## Run
 
 ```bash
-uv run --env-file .env python examples/run.py \
-  --url https://en.wikipedia.org/wiki/Main_Page \
-  --goal 'Find and open the Wikipedia article about Gödel’s incompleteness theorems.'
+uv run --env-file .env python -m internship_apply.apply \
+  --url "https://jobs.example.com/postings/1234" \
+  --profile internship_apply/profile.json
 ```
 
-`uv run --env-file .env python examples/flights.py --keep-open` performs the flight search, checks the actual route/date/results, and saves its trace. It does not select or book a flight.
+It prints each field as it fills it:
 
-## Why it moves
+```text
+   210 ms  fill    Full name
+   340 ms  fill    Email
+   480 ms  select  Are you legally authorized to work in the U.S. without sponsorship?
+   610 ms  fill    Why are you interested in this role?
 
-- **One request per decision cycle.** Operation and target heads share the same observed state.
-- **No screenshots in the default agent loop.** Jev consumes structured state. The inspector opts into screenshots; the video uses a separate continuous screencast.
-- **One browser call per snapshot.** Read visible controls, their names, values, and text atomically. Keep references to the actual DOM nodes.
-- **Validate the selected target.** Clicks check the document, form values, target, and nearby context. Animation alone does not force another prediction. Resolve current geometry and reject covered controls before input.
-- **Wait for useful state.** After typing into a combobox, wait for visible suggestions, capped at 200 ms. Other interactions get at most two animation frames or 50 ms. These reads happen after execution is logged.
-- **Keep hidden tabs rendering.** Focus emulation prevents background animation throttling without switching Chrome's visible tab.
-- **Send visible text.** Offscreen article bodies and footers do not fill the model context.
-- **Reuse an interrupted text request.** A generated value survives a stale-page retry only if the entire text-helper input is unchanged.
+Stopped before clicking a submit control: "Submit Application"
+Review the filled form in the browser, then either:
+  - click it yourself, or
+  - re-run this command with --confirm-submit once you've checked it.
+```
 
-Every executed target is resolved from an observed node. The executor rechecks page freshness and click occlusion. Model output never becomes selectors, coordinates, shell commands, or executable JavaScript. Text-helper output must parse as a small JSON object before typing.
+<img src="docs/demo-filled-questions.jpg" alt="The application-questions section of the sample form filled in, with the Submit Application button visible but unclicked" width="100%" />
 
-## Small enough to read
-
-| File | Job |
-| --- | --- |
-| [agent.py](jev_ultrafast/agent.py) | The complete loop and text-helper handoff |
-| [snapshot.js](jev_ultrafast/snapshot.js) | Atomic DOM snapshot, indexed controls, freshness guards |
-| [browser.py](jev_ultrafast/browser.py) | Browser connection, current geometry, execution |
-| [model.py](jev_ultrafast/model.py) | Dynamic operation/target heads and text generation |
-| [questions.py](jev_ultrafast/questions.py) | Model instructions |
-| [demo.py](jev_ultrafast/demo.py) | Local inspector |
-
-## Evidence and limits
-
-The current video is a **7,073 ms** Google Flights run. Timing starts after initial page observation and includes model calls, generated text, browser work, stale decisions, and loading waits. A fresh independent check verifies the one-way setting, Zürich, London, September 20, 2026, and visible flight options. The video plays at 1×, with no opening hold and a 0.5-second final hold.
-
-In six alternating runs with identical models and settings, both versions passed **3/3**. Median task time went from **9.450 s → 7.092 s**, a **25% reduction**; median browser protocol calls went from **1,092 → 101**. This is three repeats of one task on one browser profile, not a general reliability benchmark.
-
-The same policy opened the requested Wikipedia article in **2.798 s** and passed a local hotel search/filter task in **1.896 s**. Runs, failures, source hashes, and measurement boundaries are in [performance.md](docs/performance.md).
-
-A `DONE` choice still requires independent outcome verification. The DOM reader handles common HTML and ARIA controls, not the full accessible-name specification. Shadow roots, frames, canvas, uploads, pop-up tabs, nested scrolling, and arbitrary keyboard widgets remain outside this MVP. Owned tabs share the existing Chrome profile.
-
-## Development
+If a field couldn't be filled from your resume or profile, it's listed at the end so you can finish it by hand before you submit.
 
 ```bash
-uv run ruff check .
-uv run pytest
-node --check jev_ultrafast/static/app.js
-node --check jev_ultrafast/snapshot.js
-uv build
+# once you've reviewed the form yourself:
+uv run --env-file .env python -m internship_apply.apply \
+  --url "https://jobs.example.com/postings/1234" \
+  --profile internship_apply/profile.json \
+  --confirm-submit
 ```
 
-Tests are offline. `uv run python scripts/check_guards.py` checks real controls in a local browser without model calls. Live examples and recording scripts make paid API calls. `scripts/record_flights.py <new-folder>` captures original browser timestamps; `scripts/render_demo.py <recording-folder>` renders that verified run at 1× and crops out the Google account strip. Credentials and raw traces stay ignored.
+Full usage, the profile schema, and more on the ToS question: [`internship_apply/README.md`](internship_apply/README.md).
 
----
+## What it's not
 
-[Browser Use](https://github.com/browser-use/browser-use) · [Browser Harness](https://github.com/browser-use/browser-harness) · [TypeSafe speculative fan-out](https://docs.typesafe.ai/patterns/fan-out)
+- **Not a job search tool.** You give it one posting URL at a time; it doesn't browse boards or discover postings for you.
+- **Not a mass-applier.** Running it against many postings in a loop is exactly the use its own submit guard and the ToS note above are trying to keep you out of.
+- **Not a resume writer.** It reads your resume; it doesn't improve it.
+
+## Credits
+
+The browser agent — the operation/target decision loop, the DOM snapshot reader, and the Chrome connection — is [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), used here under its MIT license (see [LICENSE](LICENSE)). All of the underlying "why it's fast" engineering — one TypeSafe request per decision, atomic DOM reads, freshness checks before every click — is their work, not this repo's. `internship_apply/` is what's new here: the profile/resume loading, the goal construction, the submit guard, and the CLI around it.
+
+Decision model: [TypeSafe's Jev](https://docs.typesafe.ai/introduction).
