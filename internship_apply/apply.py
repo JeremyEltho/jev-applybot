@@ -103,3 +103,17 @@ def run(url, profile_path, *, confirm_submit=False, record_dir=None):
         for b in blanks:
             print(f"  - {b}")
     return agent.state["status"]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--url", required=True, help="The job posting / application URL")
+    parser.add_argument("--profile", required=True, help="Path to a profile JSON (see profile.example.json)")
+    parser.add_argument("--confirm-submit", action="store_true", help="Allow clicking the final submit control")
+    parser.add_argument("--record-dir", default=None, help="Optional: save a screenshot per step here")
+    args = parser.parse_args()
+    run(args.url, args.profile, confirm_submit=args.confirm_submit, record_dir=args.record_dir)
+
+
+if __name__ == "__main__":
+    main()
