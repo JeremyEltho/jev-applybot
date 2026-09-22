@@ -67,6 +67,10 @@ Chrome connects through [Browser Harness](https://github.com/browser-use/browser
 
 `TEXT_MODEL_API_KEY` is an OpenRouter key in the example configuration. The current demo uses `inception/mercury-2.5` with reasoning disabled. Gemini, GLM, and DeepSeek can also use the OpenAI-compatible text helper; configure the appropriate model, endpoint, and reasoning setting.
 
+## Internship application filler
+
+[`internship_apply/`](internship_apply/README.md) fills one job application form from a resume and a candidate profile, using the same click/type/select loop above. It stops before the final Submit/Apply control by default, so a person always reviews before anything is sent.
+
 ## Use the library
 
 ```python
