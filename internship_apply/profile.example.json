@@ -1,23 +1,65 @@
 {
   "name": "Your Name",
+  "first_name": "Your",
+  "last_name": "Name",
   "email": "you@example.edu",
   "phone": "555-555-5555",
+  "phone_type": "Mobile",
   "location": "Your City, ST",
+  "address": {
+    "line1": "123 Main St",
+    "city": "Your City",
+    "state": "ST",
+    "postal_code": "00000",
+    "country": "United States of America"
+  },
   "school": "Your University",
   "graduation": "May 2027",
   "resume_path": "resume.txt",
+  "resume_file": "resume.pdf",
   "links": {
     "linkedin": "https://linkedin.com/in/your-handle",
     "github": "https://github.com/your-handle",
     "portfolio": ""
   },
+  "education": [
+    {
+      "school": "Your University",
+      "degree": "Bachelor of Science",
+      "field_of_study": "Computer Science",
+      "start": "08/2023",
+      "end": "05/2027",
+      "gpa": "3.8"
+    }
+  ],
+  "experience": [
+    {
+      "title": "Software Engineering Intern",
+      "company": "Example Corp",
+      "location": "Remote",
+      "start": "06/2025",
+      "end": "08/2025",
+      "current": false,
+      "description": "Two or three lines on what you built and the impact it had."
+    }
+  ],
   "answers": {
     "work_authorization": "Yes, I am authorized to work in the United States without sponsorship.",
     "requires_sponsorship": "No",
+    "previously_employed_here": "No",
     "why_this_company": "Write 2-3 sentences specific to each company here, or leave blank to let the agent draft from your resume.",
     "why_this_role": "",
     "start_date": "Available starting June 2027",
     "relocation": "Open to relocating for the right opportunity.",
-    "referral": "None"
+    "referral": "None",
+    "how_did_you_hear": "Company careers site"
+  },
+  "disclosures": {
+    "_note": "Voluntary self-identification (EEO) questions. Leave a value blank to decline to answer that question.",
+    "gender": "",
+    "race_ethnicity": "",
+    "hispanic_or_latino": "",
+    "veteran_status": "",
+    "disability_status": ""
   }
 }
